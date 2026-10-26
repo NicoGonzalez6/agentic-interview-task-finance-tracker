@@ -15,9 +15,7 @@ export type {
   BudgetsOverview,
 } from "./budgets.server";
 
-// --- Schemas ---
-
-// Integer minor units; the cap keeps sums far below Postgres integer limits.
+// Minor units; the cap keeps sums far below Postgres integer limits.
 const limitMinorSchema = z.number().int().positive().max(1_000_000_000);
 
 const createBudgetSchema = z.object({
@@ -34,12 +32,6 @@ const deleteBudgetSchema = z.object({
   id: z.string().min(1),
 });
 
-// --- Server Functions ---
-
-/**
- * Fetches this month's status of every budget (limit, spent, remaining,
- * over budget) plus the plan usage for the "x of y budgets" display.
- */
 export const getBudgets = createServerFn({ method: "GET" }).handler(
   async () => {
     const userId = await requireUserId();
@@ -47,10 +39,7 @@ export const getBudgets = createServerFn({ method: "GET" }).handler(
   },
 );
 
-/**
- * Creates a budget. Creating one that is already exceeded sends the
- * over-budget alert right away.
- */
+// Creating or lowering a budget below this month's spending alerts right away.
 export const createBudget = createServerFn({ method: "POST" })
   .inputValidator(createBudgetSchema)
   .handler(async ({ data }) => {
@@ -60,10 +49,6 @@ export const createBudget = createServerFn({ method: "POST" })
     return result;
   });
 
-/**
- * Changes a budget's monthly limit. Lowering it below this month's spending
- * sends the over-budget alert right away.
- */
 export const updateBudget = createServerFn({ method: "POST" })
   .inputValidator(updateBudgetSchema)
   .handler(async ({ data }) => {

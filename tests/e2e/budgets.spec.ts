@@ -2,15 +2,8 @@ import { test, expect, type Page } from "./fixtures";
 import type { APIRequestContext, Locator } from "@playwright/test";
 
 //
-// Monthly category budgets: CRUD, validation, spend aggregation across the
-// category tree, over-budget state with a single email alert per month,
-// Free/Pro gating, and interaction with category deletion.
-//
-// Every test runs as a fresh `signedInUser` seeded with the default
-// categories (Groceries → Vegetables, …, Entertainment → Dining Out, …) and a
-// "Main" account, so seeded names never collide across parallel tests.
-// Transactions are dated the 15th of the current UTC month at noon so the
-// month boundary (and the browser timezone) never moves them out of range.
+// Transactions are dated the 15th of the current UTC month at noon so neither
+// the month boundary nor the browser timezone moves them out of range.
 
 type CapturedEmail = { to: string; subject: string; text: string };
 
@@ -186,7 +179,6 @@ test.describe("Budgets page", () => {
     await expect(row.getByTestId("budget-limit")).toContainText("500.00");
     await expect(row.getByTestId("budget-spent")).toContainText("0.00");
     await expect(row.getByTestId("budget-remaining")).toContainText("500.00");
-    // Nothing spent yet: the bar is empty and no over-budget badge shows.
     await expect(row.getByRole("progressbar")).toHaveAttribute(
       "aria-valuenow",
       "0",
@@ -204,11 +196,9 @@ test.describe("Budgets page", () => {
     await expect(row.getByTestId("budget-limit")).toContainText("750.00");
     await expect(row.getByTestId("budget-remaining")).toContainText("750.00");
 
-    // Survives a reload — state is server-side.
     await page.reload();
     await expect(budgetRow(page, "Groceries")).toContainText("750.00");
 
-    // Cancel keeps the budget, confirming deletes it.
     await budgetRow(page, "Groceries").getByTestId("delete-budget").click();
     const confirm = page.getByRole("alertdialog", { name: "Delete Budget" });
     await expect(confirm).toBeVisible();
@@ -399,7 +389,6 @@ test.describe("Budget alerts on limit changes", () => {
     const row = budgetRow(page, "Transport");
     await expect(row.getByTestId("budget-spent")).toContainText("40.00");
     await expect(row.getByTestId("budget-over-badge")).toBeHidden();
-    // Under the limit: no alert yet.
     expect(await fetchEmails(page.request, email, subjectPart)).toHaveLength(0);
 
     // Deliberate behaviour: lowering the limit under the month's spending

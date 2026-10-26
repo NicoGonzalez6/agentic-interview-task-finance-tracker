@@ -8,20 +8,15 @@ import { env } from "#/server/env";
 import { getLogger } from "#/server/logger";
 
 //
-// Monthly category budgets. Server-only — imported by budgets.functions.ts
-// and by the write paths that can raise spending (transactions, imports,
-// categorization). Spent amounts are always derived from transactions for
-// the current UTC calendar month, so budgets reset with no scheduled job.
-// A parent category's budget includes spending in all of its descendants.
+// Monthly category budgets. Spending is derived from transactions for the
+// current UTC month, so budgets reset without a scheduled job.
 
 type Db = typeof defaultDb;
 
 export interface MonthRange {
   /** 'YYYY-MM' — also the value stored in budgets.last_alert_month. */
   month: string;
-  /** Inclusive lower bound, 'YYYY-MM-DD' (comparable with transactions.date). */
   from: string;
-  /** Exclusive upper bound: the first day of the next month. */
   toExclusive: string;
 }
 
@@ -68,11 +63,7 @@ export function monthRange(now: Date): MonthRange {
   };
 }
 
-/**
- * Ids of every descendant of `rootId` (children, grandchildren, ...), not
- * including the root. Category nesting is arbitrary depth; the visited guard
- * keeps a corrupt parent cycle from looping forever.
- */
+/** Ids of all descendants of `rootId` at any depth; guarded against cycles. */
 export function collectDescendants(
   categories: ReadonlyArray<{ id: string; parent_id: string | null }>,
   rootId: string,
@@ -104,7 +95,6 @@ interface LoadedBudget extends BudgetStatus {
   lastAlertMonth: string | null;
 }
 
-/** Budgets with this month's spending rolled up over each category subtree. */
 async function loadBudgets(
   userId: string,
   db: Db,
@@ -178,7 +168,6 @@ async function loadBudgets(
   });
 }
 
-/** This month's status of every budget the user owns, plus plan usage. */
 export async function getBudgetStatusesInternal(
   userId: string,
   db: Db = defaultDb,
@@ -220,8 +209,7 @@ export async function createBudgetInternal(
     return { error: "Category not found" };
   }
 
-  // The unique (user_id, category_id) index makes the duplicate check
-  // atomic: a concurrent second insert is a no-op, not a crash.
+  // The unique index makes the duplicate check atomic under concurrency.
   const inserted = await db
     .insert(schema.budgets)
     .values({
@@ -243,7 +231,6 @@ export async function createBudgetInternal(
   return { success: true };
 }
 
-/** Changes the monthly limit. The category of a budget never changes. */
 export async function updateBudgetInternal(
   userId: string,
   data: { id: string; limitMinor: number },
@@ -278,14 +265,9 @@ export async function deleteBudgetInternal(
 const money = (minor: number) => `${formatMinor(minor)} ${m.analytics_currency()}`;
 
 /**
- * Emails the user about every budget that is over its limit this month, at
- * most once per budget per month. Call after any write that can raise
- * spending. Never throws — an alert failure must not fail the user's write.
- *
- * Idempotency: the month's alert is claimed with an atomic
- * `UPDATE ... WHERE last_alert_month IS DISTINCT FROM $month RETURNING`, so
- * concurrent calls send one email. If sending fails, the claim is released
- * and the next write retries. Only verified, active users get alerts.
+ * Emails at most one alert per over-limit budget per month, claimed with an
+ * atomic UPDATE on last_alert_month. Never throws: an alert failure must not
+ * fail the write that triggered it.
  */
 export async function notifyBudgetOverruns(
   userId: string,

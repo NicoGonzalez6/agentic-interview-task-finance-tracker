@@ -3,20 +3,15 @@ import { db, schema } from "#/db";
 import { ownedEntityExists } from "#/server/ownership.server";
 
 //
-// Server-only category logic, split out of categories.functions.ts so it can
-// be unit-tested against the in-memory DB. Every statement is scoped to the
-// owning user — a foreign category id behaves exactly like a missing one.
+// Every statement is scoped to the owning user: a foreign category id
+// behaves exactly like a missing one.
 
 export interface DeleteCategoryInput {
   id: string;
   reassignToCategoryId?: string | null;
 }
 
-/**
- * Deletes a category and all of its descendants. Transactions are reassigned
- * to `reassignToCategoryId` (or uncategorized), receipt items are
- * uncategorized, and rules and budgets on the deleted categories are removed.
- */
+/** Deletes a category and its descendants, cleaning up every reference. */
 export async function deleteCategoryInternal(
   userId: string,
   data: DeleteCategoryInput,
@@ -92,9 +87,8 @@ export async function deleteCategoryInternal(
       );
   }
 
-  // Reset category_id on receipt_items that reference any of these
-  // categories. receipt_items has no user_id — scope it via the user's
-  // receipts.
+  // Reset category_id on receipt_items that reference any of these categories
+  // (no user_id column, so scoped via the user's receipts)
   await db
     .update(schema.receipt_items)
     .set({ category_id: null })

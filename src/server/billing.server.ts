@@ -122,9 +122,7 @@ export type BudgetLimitResult =
       error: string;
     };
 
-/** Gate for budget creation: free plan allows up to freeMaxBudgets. Same
- * downgrade rule as accounts — existing budgets above the limit are kept,
- * only creating new ones is blocked. */
+/** Gate for budget creation; same downgrade rule as checkAccountLimit. */
 export async function checkBudgetLimit(
   userId: string,
   db: Db = defaultDb,

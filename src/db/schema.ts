@@ -209,11 +209,8 @@ export const categorization_rules = pgTable(
   ],
 );
 
-// Monthly spending limit per category, at most one per (user, category).
-// Spent amounts are never stored — they are derived from transactions on
-// read, so the monthly reset needs no job. last_alert_month ('YYYY-MM') is
-// the over-budget email ledger: claimed with an atomic UPDATE ... RETURNING
-// so each budget sends at most one alert per calendar month.
+// Monthly spending limit per category; spent is derived from transactions.
+// last_alert_month ('YYYY-MM') enforces one over-budget email per month.
 export const budgets = pgTable(
   "budgets",
   {
