@@ -237,10 +237,11 @@ test.describe("Budgets page", () => {
 });
 
 test.describe("Budget validation", () => {
-  for (const [label, value] of [
-    ["empty", ""],
-    ["zero", "0"],
-    ["negative", "-25"],
+  for (const [label, value, message] of [
+    ["empty", "", "Enter a monthly limit greater than 0."],
+    ["zero", "0", "Enter a monthly limit greater than 0."],
+    ["negative", "-25", "Enter a monthly limit greater than 0."],
+    ["too large", "10000001", "Monthly limit is too large."],
   ] as const) {
     test(`rejects a ${label} monthly limit`, async ({
       page,
@@ -252,7 +253,9 @@ test.describe("Budget validation", () => {
       await dialog.getByLabel("Monthly limit").fill(value);
       await dialog.getByRole("button", { name: "Create Budget" }).click();
 
-      // The dialog stays open and nothing is persisted.
+      // The form opts out of native validation, so the app's own message
+      // shows; the dialog stays open and nothing is persisted.
+      await expect(dialog.getByRole("alert")).toContainText(message);
       await expect(dialog).toBeVisible();
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByTestId("budget-row")).toHaveCount(0);
@@ -260,6 +263,23 @@ test.describe("Budget validation", () => {
       await expect(page.getByTestId("budget-row")).toHaveCount(0);
     });
   }
+
+  test("requires a category to be chosen", async ({
+    page,
+    signedInUser: _signedInUser,
+  }) => {
+    await gotoBudgets(page);
+    const dialog = await openNewBudgetDialog(page);
+    await dialog.getByLabel("Monthly limit").fill("100");
+    await dialog.getByRole("button", { name: "Create Budget" }).click();
+
+    await expect(dialog.getByRole("alert")).toContainText(
+      "Please choose a category.",
+    );
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("budget-row")).toHaveCount(0);
+  });
 
   test("does not offer a category that already has a budget", async ({
     page,
@@ -353,6 +373,49 @@ test.describe("Budget spending", () => {
     });
     const after = await fetchEmails(page.request, email, subjectPart);
     expect(after).toHaveLength(1);
+  });
+});
+
+test.describe("Budget alerts on limit changes", () => {
+  test("lowering the limit below current spending sends exactly one alert", async ({
+    page,
+    signedInUser,
+  }) => {
+    const suffix = signedInUser.username;
+    const email = `${signedInUser.username}@example.com`;
+    const subjectPart = "over your Transport budget";
+
+    await gotoBudgets(page);
+    await createBudget(page, "Transport", "100");
+    await expect(budgetRow(page, "Transport")).toHaveCount(1);
+
+    await createTransaction(page, {
+      description: `Fuel ${suffix}`,
+      amount: "40.00",
+      category: "Fuel",
+    });
+
+    await gotoBudgets(page);
+    const row = budgetRow(page, "Transport");
+    await expect(row.getByTestId("budget-spent")).toContainText("40.00");
+    await expect(row.getByTestId("budget-over-badge")).toBeHidden();
+    // Under the limit: no alert yet.
+    expect(await fetchEmails(page.request, email, subjectPart)).toHaveLength(0);
+
+    // Deliberate behaviour: lowering the limit under the month's spending
+    // counts as going over budget and alerts once.
+    await row.getByTestId("edit-budget").click();
+    const editDialog = page.getByRole("dialog", { name: "Edit Budget" });
+    await editDialog.getByLabel("Monthly limit").fill("30");
+    await editDialog.getByRole("button", { name: "Save Changes" }).click();
+    await expect(editDialog).toBeHidden();
+
+    await expect(row.getByTestId("budget-over-badge")).toBeVisible();
+    await expect(row.getByTestId("budget-remaining")).toContainText(
+      /Over by .*10\.00/,
+    );
+    await pollEmails(page.request, email, subjectPart);
+    expect(await fetchEmails(page.request, email, subjectPart)).toHaveLength(1);
   });
 });
 
