@@ -60,6 +60,8 @@ test.describe("Data export", () => {
     ).toContain("Main");
     expect(files["transactions.csv"]).toBeDefined();
     expect(files["categories.csv"]).toBeDefined();
+    expect(files["budgets.csv"]).toBeDefined();
+    expect(Array.isArray(json.budgets)).toBe(true);
   });
 
   test("rejects unauthenticated export requests", async ({

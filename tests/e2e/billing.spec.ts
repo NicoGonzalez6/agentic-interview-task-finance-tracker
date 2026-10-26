@@ -22,6 +22,9 @@ test.describe("billing page", () => {
     await expect(page.getByTestId("billing-scans-usage")).toHaveText(
       /0 of \d+ receipt scans/,
     );
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "0 of 3 budgets",
+    );
     // No Stripe keys in TEST_MODE → upgrade is unavailable and says so.
     await expect(
       page.getByRole("button", { name: "Upgrade to Pro" }),
@@ -44,6 +47,9 @@ test.describe("billing page", () => {
     );
     await expect(page.getByTestId("billing-scans-usage")).toHaveText(
       /0 of 200 receipt scans/,
+    );
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      /0 budgets \(unlimited\)/,
     );
 
     // Entitlements changed without re-login: the scan page shows the pro
