@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { db, schema } from "#/db";
+import { deleteCategoryInternal } from "#/server/categories.server";
 import { normalizeStorageKey } from "#/server/storage";
 import {
   OWNED_TABLES,
@@ -85,6 +87,72 @@ describe("cross-tenant authorization", () => {
         .soft(await ownedEntityExists(entity, userB, "no-such-id"), entity)
         .toBe(false);
     }
+  });
+});
+
+describe("category deletion scoping", () => {
+  it("deleting another user's category is not found and touches nothing", async () => {
+    expect(await deleteCategoryInternal(userB, { id: ids.category })).toEqual({
+      error: "Category not found",
+    });
+
+    const [category] = await db
+      .select()
+      .from(schema.categories)
+      .where(eq(schema.categories.id, ids.category));
+    expect(category?.user_id).toBe(userA);
+    const [rule] = await db
+      .select()
+      .from(schema.categorization_rules)
+      .where(eq(schema.categorization_rules.id, ids.rule));
+    expect(rule?.category_id).toBe(ids.category);
+  });
+
+  it("an owner's deletion leaves other users' rows alone", async () => {
+    // B owns a category with a child; A's rule and transaction still point
+    // at A's category and must survive B's delete.
+    await db.insert(schema.categories).values([
+      { id: "authz-cat-b", user_id: userB, name: "B's category" },
+      {
+        id: "authz-cat-b-child",
+        user_id: userB,
+        name: "B's child",
+        parent_id: "authz-cat-b",
+      },
+    ]);
+    await db.insert(schema.categorization_rules).values({
+      id: "authz-rule-b",
+      user_id: userB,
+      pattern: "TEA",
+      category_id: "authz-cat-b-child",
+    });
+    await db
+      .update(schema.transactions)
+      .set({ category_id: ids.category })
+      .where(eq(schema.transactions.id, ids.transaction));
+
+    expect(await deleteCategoryInternal(userB, { id: "authz-cat-b" })).toEqual({
+      success: true,
+    });
+
+    const bCategories = await db
+      .select()
+      .from(schema.categories)
+      .where(eq(schema.categories.user_id, userB));
+    expect(bCategories).toEqual([]);
+    const bRules = await db
+      .select()
+      .from(schema.categorization_rules)
+      .where(eq(schema.categorization_rules.user_id, userB));
+    expect(bRules).toEqual([]);
+
+    expect(await ownedEntityExists("category", userA, ids.category)).toBe(true);
+    expect(await ownedEntityExists("rule", userA, ids.rule)).toBe(true);
+    const [txn] = await db
+      .select()
+      .from(schema.transactions)
+      .where(eq(schema.transactions.id, ids.transaction));
+    expect(txn?.category_id).toBe(ids.category);
   });
 });
 
