@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
 import {
   checkAccountLimit,
+  checkBudgetLimit,
   entitlementsForPlan,
   getEntitlements,
   getSubscription,
@@ -52,6 +53,10 @@ describe("billing entitlements and webhook processing", () => {
     await db.delete(schema.subscriptions);
     await db.delete(schema.stripe_events);
     await db.delete(schema.ai_usage);
+    await db.delete(schema.budgets).where(eq(schema.budgets.user_id, userId));
+    await db
+      .delete(schema.categories)
+      .where(eq(schema.categories.user_id, userId));
     await db.delete(schema.accounts).where(eq(schema.accounts.user_id, userId));
     await db.delete(schema.users).where(eq(schema.users.id, userId));
   });
@@ -60,11 +65,13 @@ describe("billing entitlements and webhook processing", () => {
     expect(entitlementsForPlan("free")).toEqual({
       plan: "free",
       maxAccounts: env.billing.freeMaxAccounts,
+      maxBudgets: env.billing.freeMaxBudgets,
       scansPerMonth: env.ai.freeScansPerMonth,
     });
     expect(entitlementsForPlan("pro")).toEqual({
       plan: "pro",
       maxAccounts: null,
+      maxBudgets: null,
       scansPerMonth: env.billing.proScansPerMonth,
     });
   });
@@ -107,6 +114,31 @@ describe("billing entitlements and webhook processing", () => {
     // accounts above the free limit stay usable after any downgrade.
     await setSubscription("pro", "active");
     expect((await checkAccountLimit(userId, db)).allowed).toBe(true);
+  });
+
+  it("blocks budget creation at the free limit and never for pro", async () => {
+    for (let i = 0; i < env.billing.freeMaxBudgets; i++) {
+      await db.insert(schema.categories).values({
+        id: `billing-cat-${i}`,
+        user_id: userId,
+        name: `Category ${i}`,
+      });
+      await db.insert(schema.budgets).values({
+        id: `billing-budget-${i}`,
+        user_id: userId,
+        category_id: `billing-cat-${i}`,
+        limit_minor: 10_000,
+      });
+    }
+    const blocked = await checkBudgetLimit(userId, db);
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) {
+      expect(blocked.code).toBe("budget_limit_reached");
+      expect(blocked.limit).toBe(env.billing.freeMaxBudgets);
+    }
+
+    await setSubscription("pro", "active");
+    expect((await checkBudgetLimit(userId, db)).allowed).toBe(true);
   });
 
   it("scan quota and usage summary follow the plan", async () => {
