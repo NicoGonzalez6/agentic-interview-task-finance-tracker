@@ -58,6 +58,13 @@ async function seedFullUser(userId: string) {
     pattern: "grocery",
     category_id: `${userId}-cat`,
   });
+  await db.insert(schema.budgets).values({
+    id: `${userId}-budget`,
+    user_id: userId,
+    category_id: `${userId}-cat`,
+    limit_minor: 50000,
+    last_alert_month: "2026-07",
+  });
   const imageKey = `receipts/${userId}/test.jpg`;
   await storage.put(imageKey, new Uint8Array([0xff, 0xd8, 0xff, 0x42]));
   await db.insert(schema.receipts).values({
@@ -124,6 +131,9 @@ describe("compliance: data export", () => {
     expect(json.receipts[0].items).toHaveLength(1);
     expect(json.receipts[0].image_file).toBe(`receipts/${userId}-rcpt.jpg`);
     expect(json.categorizationRules).toHaveLength(1);
+    expect(json.budgets).toHaveLength(1);
+    expect(json.budgets[0].limit_minor).toBe(50000);
+    expect(json.budgets[0].category_id).toBe(`${userId}-cat`);
     expect(json.subscription.plan).toBe("free");
 
     const txnCsv = strFromU8(files["transactions.csv"]);
@@ -134,6 +144,8 @@ describe("compliance: data export", () => {
     expect(strFromU8(files["accounts.csv"])).toContain('"Checking"');
     expect(strFromU8(files["categories.csv"])).toContain('"Groceries"');
     expect(strFromU8(files["categorization_rules.csv"])).toContain('"grocery"');
+    const budgetsCsv = strFromU8(files["budgets.csv"]);
+    expect(budgetsCsv).toContain(`"${userId}-budget","Groceries","500.00","50000","2026-07"`);
 
     expect(Array.from(files[`receipts/${userId}-rcpt.jpg`])).toEqual([
       0xff, 0xd8, 0xff, 0x42,
@@ -156,6 +168,7 @@ describe("compliance: account hard delete", () => {
       db.select().from(schema.transactions).where(eq(schema.transactions.user_id, userId)),
       db.select().from(schema.import_batches).where(eq(schema.import_batches.user_id, userId)),
       db.select().from(schema.categorization_rules).where(eq(schema.categorization_rules.user_id, userId)),
+      db.select().from(schema.budgets).where(eq(schema.budgets.user_id, userId)),
       db.select().from(schema.receipts).where(eq(schema.receipts.user_id, userId)),
       db.select().from(schema.receipt_items).where(eq(schema.receipt_items.receipt_id, `${userId}-rcpt`)),
       db.select().from(schema.ai_usage).where(eq(schema.ai_usage.user_id, userId)),
