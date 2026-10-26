@@ -373,7 +373,7 @@
   "email_deletion_canceled_subject": "Account deletion canceled — Finance Tracker",
   "email_deletion_canceled_body": "The scheduled deletion of your Finance Tracker account has been canceled. Your account and data remain untouched.\n\nIf you did not cancel it yourself, change your password immediately.",
   "email_account_deleted_subject": "Your account has been deleted — Finance Tracker",
-  "email_account_deleted_body": "Your Finance Tracker account and all associated data (transactions, accounts, categories, receipts and receipt images) have been permanently deleted, and any active subscription was canceled.\n\nThank you for having used Finance Tracker.",
+  "email_account_deleted_body": "Your Finance Tracker account and all associated data (transactions, accounts, categories, budgets, receipts and receipt images) have been permanently deleted, and any active subscription was canceled.\n\nThank you for having used Finance Tracker.",
   "email_budget_exceeded_subject": "You're over your {category} budget — Finance Tracker",
   "email_budget_exceeded_body": "You have gone over your monthly budget for {category}.\n\nSpent in {month}: {spent}\nMonthly limit: {limit}\n\nReview your budgets here:\n\n{link}\n\nYou'll get at most one alert per budget each month.",
   "legal_privacy": "Privacy Policy",
