@@ -343,6 +343,7 @@
   "budgets_category_required": "Please choose a category.",
   "budgets_no_categories_left": "Every category already has a budget.",
   "budgets_limit_invalid": "Enter a monthly limit greater than 0.",
+  "budgets_limit_too_large": "Monthly limit is too large.",
   "budgets_over_budget": "Over budget",
   "budgets_over_by": "Over by {amount}",
   "budgets_progress_label": "{category}: {percent}% of monthly limit spent",

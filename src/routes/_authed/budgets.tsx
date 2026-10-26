@@ -47,6 +47,10 @@ type CategoryTreeNode = CategoryRow & {
   children: CategoryTreeNode[];
 };
 
+// Mirrors the server-side cap on limitMinor in budgets.functions.ts so an
+// oversized limit gets a friendly message instead of a schema error.
+const MAX_LIMIT_MINOR = 1_000_000_000;
+
 export const Route = createFileRoute("/_authed/budgets")({
   component: BudgetsPage,
 });
@@ -283,6 +287,10 @@ function BudgetForm({
     const limitMinor = parseAmountToMinor(limit);
     if (limitMinor === null || limitMinor <= 0) {
       setValidationError(m.budgets_limit_invalid());
+      return;
+    }
+    if (limitMinor > MAX_LIMIT_MINOR) {
+      setValidationError(m.budgets_limit_too_large());
       return;
     }
     setSubmitting(true);
