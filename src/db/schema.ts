@@ -9,6 +9,7 @@ import {
   doublePrecision,
   serial,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const auth_token_type = pgEnum("auth_token_type", [
@@ -205,6 +206,36 @@ export const categorization_rules = pgTable(
   },
   (t) => [
     index("categorization_rules_user_priority_idx").on(t.user_id, t.priority),
+  ],
+);
+
+// Monthly spending limit per category, at most one per (user, category).
+// Spent amounts are never stored — they are derived from transactions on
+// read, so the monthly reset needs no job. last_alert_month ('YYYY-MM') is
+// the over-budget email ledger: claimed with an atomic UPDATE ... RETURNING
+// so each budget sends at most one alert per calendar month.
+export const budgets = pgTable(
+  "budgets",
+  {
+    id: text("id").primaryKey(),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    category_id: text("category_id")
+      .notNull()
+      .references(() => categories.id),
+    // Integer minor units (grosze/cents) — never store money as floats.
+    limit_minor: integer("limit_minor").notNull(),
+    last_alert_month: text("last_alert_month"),
+    created_at: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("budgets_user_category_idx").on(t.user_id, t.category_id),
   ],
 );
 

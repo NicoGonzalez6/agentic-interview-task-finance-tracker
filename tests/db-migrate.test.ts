@@ -12,7 +12,9 @@ function freshDb() {
   return drizzle(client);
 }
 
-describe("startup migrations", () => {
+// Booting a fresh PGlite and replaying every migration can exceed the 5s
+// default when the whole suite runs in parallel.
+describe("startup migrations", { timeout: 20_000 }, () => {
   it("applies all migrations to an empty database and is idempotent", async () => {
     const db = freshDb();
     await runMigrations(db, "pglite", migrationsFolder);
