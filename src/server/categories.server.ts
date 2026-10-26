@@ -15,7 +15,7 @@ export interface DeleteCategoryInput {
 /**
  * Deletes a category and all of its descendants. Transactions are reassigned
  * to `reassignToCategoryId` (or uncategorized), receipt items are
- * uncategorized, and rules pointing at the deleted categories are removed.
+ * uncategorized, and rules and budgets on the deleted categories are removed.
  */
 export async function deleteCategoryInternal(
   userId: string,
@@ -118,6 +118,17 @@ export async function deleteCategoryInternal(
       and(
         inArray(schema.categorization_rules.category_id, allIdsToDelete),
         eq(schema.categorization_rules.user_id, userId),
+      ),
+    );
+
+  // Delete budgets on any of these categories — there are no FK cascades, so
+  // leaving them would block the category delete.
+  await db
+    .delete(schema.budgets)
+    .where(
+      and(
+        inArray(schema.budgets.category_id, allIdsToDelete),
+        eq(schema.budgets.user_id, userId),
       ),
     );
 

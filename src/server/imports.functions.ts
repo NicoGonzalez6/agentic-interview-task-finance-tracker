@@ -5,6 +5,7 @@ import { db, schema } from "#/db";
 import { isEmailVerified, requireUserId } from "#/server/session";
 import { categorizeDescription, isAIVisible } from "#/server/ai";
 import { checkSpendCap } from "#/server/ai-usage.server";
+import { notifyBudgetOverruns } from "#/server/budgets.server";
 import { formatMinor, parseAmountToMinor } from "#/lib/money";
 import {
   MAX_IMPORT_FILE_BYTES,
@@ -1076,6 +1077,9 @@ async function* streamConfirmImport(
       row_count: insertRows.length,
     });
     await db.insert(schema.transactions).values(insertRows);
+    // Before any further yield: a client that stops reading the stream must
+    // not skip the budget check.
+    await notifyBudgetOverruns(userId);
 
     if (aiRulesToCreate.length > 0) {
       const aiRulesInsert = aiRulesToCreate.map((rule) => ({

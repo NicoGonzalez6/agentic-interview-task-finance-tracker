@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, asc, count, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
+import { notifyBudgetOverruns } from "#/server/budgets.server";
 import { deleteCategoryInternal } from "#/server/categories.server";
 import { requireUserId } from "#/server/session";
 
@@ -159,6 +160,18 @@ export const updateCategory = createServerFn({ method: "POST" })
       return { error: "A category cannot be its own parent" };
     }
 
+    // Previous parent, to tell whether this update moves the category.
+    const [current] = await db
+      .select({ parent_id: schema.categories.parent_id })
+      .from(schema.categories)
+      .where(
+        and(
+          eq(schema.categories.id, data.id),
+          eq(schema.categories.user_id, userId),
+        ),
+      )
+      .limit(1);
+
     // Validate parent exists and belongs to user (if different from self)
     if (data.parentId && data.parentId !== data.id) {
       const parent = await db
@@ -216,6 +229,12 @@ export const updateCategory = createServerFn({ method: "POST" })
         ),
       );
 
+    // Moving a category under another parent rolls its spending into that
+    // parent's budget.
+    if (current && current.parent_id !== (data.parentId || null)) {
+      await notifyBudgetOverruns(userId);
+    }
+
     return { success: true };
   });
 
@@ -223,5 +242,10 @@ export const deleteCategory = createServerFn({ method: "POST" })
   .inputValidator(deleteCategorySchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
-    return deleteCategoryInternal(userId, data);
+    const result = await deleteCategoryInternal(userId, data);
+    // Reassigned transactions add to the target category's spending.
+    if ("success" in result && data.reassignToCategoryId) {
+      await notifyBudgetOverruns(userId);
+    }
+    return result;
   });
